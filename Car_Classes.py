@@ -27,12 +27,28 @@ class Parts(ListaOrdenada): # This class is a list of parts, each part has a nam
         while cursor is not None:
             current_part, current_qty = self.get_element(cursor)
             if current_part == part_name:
-                if current_qty >= qty:
+                if current_qty > qty:
                     # If the quantity is sufficient, subtract it
                     self.replace(cursor, (part_name, current_qty - qty))
+                    return 0
+                elif current_qty == qty: #If needed, this will remove the part from the inventory
+                    # If the quantity is equal, remove the part
+                    self.remove(cursor)
+                    print(f"Eliminada: {part_name}.")
+                    return -88 
                 else:
-                    raise(f"Error: Not enough quantity of {part_name} in inventory(Current:{current_qty}).")
-                return
+                    needed_qty = qty - current_qty
+                    return needed_qty
+    def model_parts_showcase(self): #Designed specifically for the catalogue, this will show the parts of a model in a different manner
+        """Return a list of parts in the inventory."""
+        parts_list = []
+        cursor = self.first()
+        while cursor is not None:
+            part, qty = self.get_element(cursor)
+            parts_list.append(f"{part} - {qty}")
+            cursor = self.after(cursor)
+        return "\n".join(parts_list)    
+    
     def __str__(self):
         """Return a string representation of the inventory."""
         parts_list = []
@@ -60,7 +76,7 @@ class Inventory(Parts): #This class is a list of parts, each part has a name and
             self.add_part(parts[i], number_of_parts[i])
         #Maybe add a return if needed later
 
-class Catalogue():
+class Catalogue():# Same logic as before, but each model has a list of parts
     def __init__(self):
         self._catalogue = {} #this is a dictionary to be used as a catalogue of models and their parts
     
@@ -81,7 +97,16 @@ class Catalogue():
                 #print(f"Por hacer: añadir al catálogo pieza \"{part_name}\" ({qty} unidades) al modelo \"{model_name}\"") # Old print from original code
                 self.add_to_catalogue(model_name, part_name, qty)
     
-    def __str__(self): #I just used this list thing bc I kinda liked it 
+    def remove_from_catalogue(self, model_name):
+        """Remove a model from the catalogue."""
+        if model_name in self._catalogue.keys():
+            del self._catalogue[model_name]
+            return True
+        else:
+            print(f"Modelo {model_name} no encontrado en el catálogo.") #This print is for debugging purposes, should be impossible to get
+            return False
+        
+    def __str__(self): #I just used this list thing bc I kinda liked it before
         """Return a string representation of the catalogue."""
         between_models = []
         for model_name in self._catalogue.keys():
@@ -90,8 +115,64 @@ class Catalogue():
             model_list.append(str(self._catalogue[model_name]))
             between_models.append("\n\t".join(model_list))
         return "\n".join(between_models)
-    
 
+class Concesionario():
+    def __init__(self):
+        self._inventario=Inventory()
+        self._catalogo=Catalogue()
+    
+    @property
+    def inventario(self):
+        return self._inventario
+
+    @property
+    def catalogo(self):
+        return self._catalogo
+    def  check_and_remove_models(self,out_of_stock_parts:list):
+        """Check if a model is out of stock and remove it from the catalogue."""
+        for part_name in out_of_stock_parts: # If the list is empty, this will not do anything
+            for model_name in self._catalogo._catalogue.keys():
+                cursor = self._catalogo._catalogue[model_name].first()
+                while cursor is not None:
+                    part, qty = self._catalogo._catalogue[model_name].get_element(cursor)
+                    if part == part_name:
+                        self.catalogo.remove_from_catalogue(model_name)
+                        print(f"Eliminado: modelo {model_name} dependiente")
+                        break
+                    cursor = self._catalogo._catalogue[model_name].after(cursor)
+
+    def procces_order(self,model_name):
+        """Process an order for a model."""
+        missing_parts = []
+        out_of_stock_parts = [] # Made a list is case there are multiple parts out of stock
+        cursor = self._catalogo[model_name].first()
+        while cursor is not None:
+            part, qty = self._catalogo[model_name].get_element(cursor)
+            result=self.inventario.sustract_part(part, qty) #This will throw an error if the part is not in stock
+            if result > 0: #If the part is not in stock, this will return the amount of parts needed
+                missing_parts.append((part, result))
+            elif result == -88: #If the part is out of stock now, this will remove the model from the catalogue
+                out_of_stock_parts.append(part) 
+            cursor = self._catalogo[model_name].after(cursor)
+        if len(missing_parts) == 0:
+            print(f"Pedido {model_name} atendido.")
+            self.check_and_remove_models(out_of_stock_parts) #If there are parts out of stock, this will remove the models from the catalogue        
+
+        else:
+            print(f"Pedido {model_name} NO atendido. Faltan:")
+            for part, qty in missing_parts:
+                print(f"\t{part} - {qty}")
+            if self.catalogo.remove_from_catalogue(model_name):
+                print(f"Eliminado: {model_name}.")
+    
+    def receive_order(self,model_name):
+        """Receive an order for a model."""
+        if model_name not in self._catalogo.keys():
+            print(f"Pedido NO atendido. Modelo {model_name} fuera de catálogo. ")
+        else:
+            print(f"{model_name}:")
+            print(f"\t{self._catalogo[model_name].model_parts_showcase()} ") # print de las piezas que le hacen falta(los items del diccionario asociados al modelo)
+            self.procces_order(model_name)
 
 # This kind of list is a messy sack of shit, I know its better in some ways, but I hate pointers for some reason 
     
