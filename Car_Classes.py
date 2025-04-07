@@ -31,14 +31,17 @@ class Parts(ListaOrdenada): # This class is a list of parts, each part has a nam
                     # If the quantity is sufficient, subtract it
                     self.replace(cursor, (part_name, current_qty - qty))
                     return 0
-                elif current_qty == qty: #If needed, this will remove the part from the inventory
+                elif current_qty == qty:  # If needed, this will remove the part from the inventory
                     # If the quantity is equal, remove the part
-                    self.remove(cursor)
+                    self.delete(cursor)
                     print(f"Eliminada: {part_name}.")
-                    return -88 
+                    return -88
                 else:
                     needed_qty = qty - current_qty
                     return needed_qty
+            cursor = self.after(cursor)
+        raise ValueError(f"La pieza {part_name} no debería faltar en el inventario.")# If the part is not found, this case should never happen if the catalog is pre-checked
+    
     def model_parts_showcase(self): #Designed specifically for the catalogue, this will show the parts of a model in a different manner
         """Return a list of parts in the inventory."""
         parts_list = []
@@ -79,7 +82,18 @@ class Inventory(Parts): #This class is a list of parts, each part has a name and
 class Catalogue():# Same logic as before, but each model has a list of parts
     def __init__(self):
         self._catalogue = {} #this is a dictionary to be used as a catalogue of models and their parts
+   
+    def keys(self): #Had a bunch of errors because of this, I had to put the keys() method in the class
+        """Return the keys of the catalogue."""
+        return self._catalogue.keys()
     
+    def __getitem__(self, model_name): #Same as before, these dictionary methods are a bit weird to handle 
+        """Return the parts of a model."""
+        if model_name in self._catalogue.keys():
+            return self._catalogue[model_name]
+        else:
+            raise KeyError(f"Modelo {model_name} no encontrado en el catálogo.")
+        
     def add_to_catalogue(self, model_name, part_name, qty): #Too easy to be true I think
         """Add a part to the catalogue."""
         if model_name not in self._catalogue.keys():
@@ -131,7 +145,7 @@ class Concesionario():
     def  check_and_remove_models(self,out_of_stock_parts:list):
         """Check if a model is out of stock and remove it from the catalogue."""
         for part_name in out_of_stock_parts: # If the list is empty, this will not do anything
-            for model_name in self._catalogo._catalogue.keys():
+            for model_name in self._catalogo.keys():
                 cursor = self._catalogo._catalogue[model_name].first()
                 while cursor is not None:
                     part, qty = self._catalogo._catalogue[model_name].get_element(cursor)
@@ -143,27 +157,30 @@ class Concesionario():
 
     def procces_order(self,model_name):
         """Process an order for a model."""
+        if model_name not in self._catalogo.keys():
+            print(f"Pedido NO atendido. Modelo {model_name} fuera de catálogo. ")
+            return
         missing_parts = []
-        out_of_stock_parts = [] # Made a list is case there are multiple parts out of stock
+        out_of_stock_parts = [] # Made a list in case multiple parts go out of stock after the order is processed
         cursor = self._catalogo[model_name].first()
         while cursor is not None:
             part, qty = self._catalogo[model_name].get_element(cursor)
-            result=self.inventario.sustract_part(part, qty) #This will throw an error if the part is not in stock
-            if result > 0: #If the part is not in stock, this will return the amount of parts needed
+            result=self.inventario.sustract_part(part, qty) #This will throw an error if the part is not in stock, but it should never happen if the catalogue is pre-checked
+            if result > 0: #If the parts in stock are not enough, this will return the amount of parts needed
                 missing_parts.append((part, result))
-            elif result == -88: #If the part is out of stock now, this will remove the model from the catalogue
+            elif result == -88: #If the part is just out of stock but able to supply the order, this if will trigger and the part will be stored in the list for later removal 
                 out_of_stock_parts.append(part) 
             cursor = self._catalogo[model_name].after(cursor)
         if len(missing_parts) == 0:
             print(f"Pedido {model_name} atendido.")
-            self.check_and_remove_models(out_of_stock_parts) #If there are parts out of stock, this will remove the models from the catalogue        
+            self.check_and_remove_models(out_of_stock_parts) #If there are parts out of stock, this will remove the models dependant on said parts from the catalogue        
 
         else:
             print(f"Pedido {model_name} NO atendido. Faltan:")
             for part, qty in missing_parts:
-                print(f"\t{part} - {qty}")
+                print(f"\t{part} - ({qty})")
             if self.catalogo.remove_from_catalogue(model_name):
-                print(f"Eliminado: {model_name}.")
+                print(f"Eliminado: {model_name} dependiente.")
     
     def receive_order(self,model_name):
         """Receive an order for a model."""
@@ -174,8 +191,10 @@ class Concesionario():
             print(f"\t{self._catalogo[model_name].model_parts_showcase()} ") # print de las piezas que le hacen falta(los items del diccionario asociados al modelo)
             self.procces_order(model_name)
 
-# This kind of list is a messy sack of shit, I know its better in some ways, but I hate pointers for some reason 
-    
+
+
+
+
 
 
 
