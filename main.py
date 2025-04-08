@@ -2,7 +2,7 @@ from linked_ordered_positional_list import LinkedOrderedPositionalList as ListaO
 #from array_ordered_positional_list import ArrayOrderedPositionalList as ListaOrdenada
 from Car_Classes import *
 
-def procces_order(orders:list,concesionario:Concesionario): #This will later be used to process the order
+def procces_orders(orders:list,concesionario:Concesionario): #This will later be used to process the order
     """Process an order for a specific model."""
     for model_name,customer in orders:
         print(f"Nuevo pedido: {model_name}--{customer}")
@@ -20,7 +20,7 @@ def read_orders_and_procces(path, concesionario): #This will read the orders fro
             customer, model_name = ls[0], ls[1]
             orders.append((model_name,customer))
             #print(f"Por hacer: procesar pedido de modelo {model_name} para cliente {customer}") # Old print from original code
-    return procces_order(orders, concesionario) #This will process the order
+    return procces_orders(orders, concesionario) #This will process the order
 
 
 			
