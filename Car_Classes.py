@@ -65,6 +65,7 @@ class Parts(ListaOrdenada): # This class is a list of parts, each part has a nam
 class Inventory(Parts): #This class is a list of parts, each part has a name and a quantity, used for the inventory.
     def __init__(self):
         super().__init__()
+    
     def read_parts_and_add_to_inventory(self,path="piezas.txt"): #I just read and directly add to the inventory
         parts=[]
         number_of_parts=[]
@@ -142,6 +143,7 @@ class Concesionario():
     @property
     def catalogo(self):
         return self._catalogo
+    
     def  check_and_remove_models(self,out_of_stock_parts:list):
         """Check if a model is out of stock and remove it from the catalogue."""
         for part_name in out_of_stock_parts: # If the list is empty, this will not do anything
