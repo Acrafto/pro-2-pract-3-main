@@ -30,15 +30,12 @@ class Parts(ListaOrdenada): # This class is a list of parts, each part has a nam
                 if current_qty > qty:
                     # If the quantity is sufficient, subtract it
                     self.replace(cursor, (part_name, current_qty - qty))
-                    return 0
-                elif current_qty == qty:  # If needed, this will remove the part from the inventory
+                    return True
+                else:  # If needed, this will remove the part from the inventory
                     # If the quantity is equal, remove the part
                     self.delete(cursor)
                     print(f"Eliminada: {part_name}.")
-                    return -88
-                else:
-                    needed_qty = qty - current_qty
-                    return needed_qty
+                    return False
             cursor = self.after(cursor)
         raise ValueError(f"La pieza {part_name} no debería faltar en el inventario.")# If the part is not found, this case should never happen if the catalog is pre-checked
     
@@ -79,6 +76,25 @@ class Inventory(Parts): #This class is a list of parts, each part has a name and
         for i in range(len(parts)):
             self.add_part(parts[i], number_of_parts[i])
         #Maybe add a return if needed later
+    
+    def sufficient_parts(self, parts:list):
+        """Check if the inventory has sufficient parts for a list of parts."""
+        missing_parts = []
+        for part_name, qty in parts:
+            found=False
+            cursor = self.first()
+            while cursor is not None:
+                current_part, current_qty = self.get_element(cursor)
+                if current_part == part_name:
+                    found=True # If the part is found, check if the quantity is sufficient
+                    if current_qty < qty:
+                        missing_parts.append((part_name, qty - current_qty)) # If the quantity is not sufficient, add it to the list
+                    break
+                cursor = self.after(cursor)
+            if not found:
+                raise ValueError(f"La pieza {part_name} no debería faltar en el inventario.") # Error if the part is not found, this case should never happen if the catalog is pre-checked
+        return missing_parts # For the parts not sufficient, to supply the order, this will return a list of tuples with the part name and the quantity needed
+    
 
 class Catalogue():# Same logic as before, but each model has a list of parts
     def __init__(self):
@@ -150,7 +166,7 @@ class Concesionario():
             for model_name in self._catalogo.keys():
                 cursor = self._catalogo._catalogue[model_name].first()
                 while cursor is not None:
-                    part, qty = self._catalogo._catalogue[model_name].get_element(cursor)
+                    part, _ = self._catalogo._catalogue[model_name].get_element(cursor)
                     if part == part_name:
                         self.catalogo.remove_from_catalogue(model_name)
                         print(f"Eliminado: modelo {model_name} dependiente")
@@ -162,21 +178,23 @@ class Concesionario():
         if model_name not in self._catalogo.keys():
             print(f"Pedido NO atendido. Modelo {model_name} fuera de catálogo. ")
             return
-        missing_parts = []
-        out_of_stock_parts = [] # Made a list in case multiple parts go out of stock after the order is processed
+        needed_parts_list = []
         cursor = self._catalogo[model_name].first()
         while cursor is not None:
             part, qty = self._catalogo[model_name].get_element(cursor)
-            result=self.inventario.sustract_part(part, qty) #This will throw an error if the part is not in stock, but it should never happen if the catalogue is pre-checked
-            if result > 0: #If the parts in stock are not enough, this will return the amount of parts needed
-                missing_parts.append((part, result))
-            elif result == -88: #If the part is just out of stock but able to supply the order, this if will trigger and the part will be stored in the list for later removal 
-                out_of_stock_parts.append(part) 
+            needed_parts_list.append((part, qty))
             cursor = self._catalogo[model_name].after(cursor)
-        if len(missing_parts) == 0:
+        missing_parts = self._inventario.sufficient_parts(needed_parts_list) #This will check if the parts are in stock, as not to start subtracting some for the order not to be attended in the end
+        
+        if len(missing_parts)==0: #If there are no missing parts, the order can be attended
+            out_of_stock_parts = [] # Made a list in case multiple parts go out of stock after the order is processed
+            for needed_part in needed_parts_list:
+                part, qty =needed_part
+                result=self.inventario.sustract_part(part, qty) #This will throw an error if the part is not in stock, but it should never happen if the catalogue is pre-checked
+                if not result:  #If the part is just out of stock but able to supply the order, this if will trigger and the part will be stored in a list for later removal 
+                    out_of_stock_parts.append(part) 
             print(f"Pedido {model_name} atendido.")
             self.check_and_remove_models(out_of_stock_parts) #If there are parts out of stock, this will remove the models dependant on said parts from the catalogue        
-
         else:
             print(f"Pedido {model_name} NO atendido. Faltan:")
             for part, qty in missing_parts:
@@ -190,8 +208,45 @@ class Concesionario():
             print(f"Pedido NO atendido. Modelo {model_name} fuera de catálogo. ")
         else:
             print(f"{model_name}:")
-            print(f"\t{self._catalogo[model_name].model_parts_showcase()} ") # print de las piezas que le hacen falta(los items del diccionario asociados al modelo)
+            print(f"\t{self._catalogo[model_name].model_parts_showcase()} ") #Special method for the catalogue to show the parts of a model
             self.procces_order(model_name)
+
+    def check_handler(self):
+        """Check the inventory and catalogue for missing or invalid parts."""
+        failed=False
+        errors_count=0
+        inventory_parts = {part: qty for part, qty in self._inventario}  # list comprehension to get the parts and their quantities from the inventory, It is unreadable but it gets the job done
+        # Check the catalogue for missing or invalid parts
+        for model_name in self._catalogo.keys():
+            cursor = self._catalogo[model_name].first()
+            while cursor is not None:
+                part, qty = self._catalogo[model_name].get_element(cursor)
+                if qty <= 0:
+                    print(f"La pieza {part} del modelo {model_name} tiene una cantidad inválida: ({qty}).")
+                    failed=True
+                    errors_count+=1
+                if part not in inventory_parts:
+                    print(f"La pieza {part} del modelo {model_name} no existe en el inventario.")
+                    failed=True
+                    errors_count+=1
+                cursor = self._catalogo[model_name].after(cursor)
+
+        # Inventory check, for invalid quantities
+        cursor = self._inventario.first()
+        while cursor is not None:
+            part, qty = self._inventario.get_element(cursor)
+            if qty <= 0:
+                print(f"La pieza {part} en el inventario tiene una cantidad inválida ({qty}).")
+                failed=True
+                errors_count+=1
+            cursor = self._inventario.after(cursor)
+        if failed:
+            raise ValueError(f"Se encontraron errores ({errors_count}) en el inventario y catálogo. Verifique los mensajes anteriores y revise los archivos fuente.") # This will raise an error if there are any errors in the inventory or catalogue
+        return True
+
+
+
+
 
 
 
